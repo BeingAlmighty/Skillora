@@ -206,7 +206,7 @@ export default function FullSidebar() {
                     <div>
                         <SidebarLink
                             link={{
-                                label: "Apex AI",
+                                label: "Skillora AI",
                                 href: "#",
                                 icon: <span className="text-xl">🤖</span>,
                             }}

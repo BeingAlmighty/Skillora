@@ -35,7 +35,7 @@ function Navbar() {
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
           <div className="flex-shrink-0">
-            <h1 className="text-2xl font-bold text-black dark:text-white">Apex</h1>
+            <h1 className="text-2xl font-bold text-black dark:text-white">Skillora</h1>
           </div>
 
           {/* Desktop Menu and Login - Right Side */}

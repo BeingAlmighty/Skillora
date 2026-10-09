@@ -91,7 +91,7 @@ export const api = {
       throw new Error('User ID is required. Please log in.');
     }
 
-    const response = await fetch('https://apex-backend-chatbot-api.onrender.com/api/chat', {
+    const response = await fetch('https://skillora-backend-chatbot-api.onrender.com/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',

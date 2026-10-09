@@ -21,7 +21,7 @@ const Landing = () => {
                 <ContainerScroll
                     titleComponent={
                     <div className='leading-[10vh]'>
-                    <h1 className="text-4xl md:text-6xl font-bold text-black dark:text-white text-center"> <h1 className='tracking-wide text-orange-500'>APEX</h1> Data Driver Career Navigator<h1>Stop Guessing. Start Investing</h1> </h1>
+                    <h1 className="text-4xl md:text-6xl font-bold text-black dark:text-white text-center"> <h1 className='tracking-wide text-orange-500'>SKILLORA</h1> Data Driver Career Navigator<h1>Stop Guessing. Start Investing</h1> </h1>
                     </div>
                 }
                 >

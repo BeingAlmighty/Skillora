@@ -1,4 +1,4 @@
-# Apex Career Navigator
+# Skillora Career Navigator
 
 Full-stack career guidance application with AI-powered resume analysis and personalized career recommendations.
 
@@ -99,7 +99,7 @@ cp .env.example .env
 
 5. **Update `.env`:**
 ```env
-DATABASE_URL=sqlite:///./apex.db
+DATABASE_URL=sqlite:///./skillora.db
 SECRET_KEY=your-secret-key-here-min-32-chars
 CORS_ORIGINS=http://localhost:5173,http://localhost:3000
 ```
@@ -149,7 +149,7 @@ VITE_API_URL=http://localhost:8000/api/v1
 
 ### Backend (`backend/.env`)
 ```env
-PROJECT_NAME=Apex Career Navigator API
+PROJECT_NAME=Skillora Career Navigator API
 API_V1_STR=/api/v1
 SECRET_KEY=your-super-secret-key
 DATABASE_URL=postgresql://user:pass@host:5432/db
@@ -210,7 +210,7 @@ npm install
 **Database connection error:**
 - Verify `DATABASE_URL` is correct
 - Ensure PostgreSQL is running
-- For dev, use SQLite: `DATABASE_URL=sqlite:///./apex.db`
+- For dev, use SQLite: `DATABASE_URL=sqlite:///./skillora.db`
 
 **Import errors:**
 - Activate virtual environment
@@ -241,5 +241,5 @@ For issues and questions:
 
 ---
 
-**Built with ❤️ for Apex Career Navigator**
+**Built with ❤️ for Skillora Career Navigator**
 

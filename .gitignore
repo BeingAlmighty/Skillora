@@ -32,8 +32,8 @@ __pycache__/
 *$py.class
 *.so
 .Python
-backend/apex.db
-backend/apex.db-journal
+backend/skillora.db
+backend/skillora.db-journal
 
 # Editor directories and files
 .vscode/*

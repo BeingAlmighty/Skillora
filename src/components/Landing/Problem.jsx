@@ -141,13 +141,13 @@ const Problem = () => {
             <span className="text-orange-500 font-semibold tracking-wider uppercase text-sm">The Solution</span>
           </div>
 
-          {/* Headline with Apex Logo */}
+          {/* Headline with Skillora Logo */}
           <div className="mb-8">
             <h2 className="text-5xl md:text-7xl font-bold text-black dark:text-white mb-4 leading-tight">
               Introducing{" "}
               <span className="relative inline-block">
                 <span className="text-orange-500">
-                  Apex
+                  Skillora
                 </span>
                 <motion.div
                   className="absolute -inset-2 bg-orange-500/20 blur-xl -z-10"
@@ -244,7 +244,7 @@ const Problem = () => {
             className="mt-12 p-10 rounded-3xl bg-gray-100 dark:bg-white/5 border-2 border-gray-400/50 text-center"
           >
             <p className="text-2xl md:text-3xl text-black dark:text-white font-medium leading-relaxed">
-              "Apex bridges this gap. We turn your career decisions into{" "}
+              "Skillora bridges this gap. We turn your career decisions into{" "}
               <span className="text-orange-500 font-bold">
                 data-driven investments
               </span>

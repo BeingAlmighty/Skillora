@@ -266,7 +266,7 @@ export default function FullSidebar({ onClearChat }) {
                                         <img 
                                             className="h-7 w-7 shrink-0 rounded-full object-cover" 
                                             src="https://miro.medium.com/v2/resize:fit:1100/format:webp/0*A7MUqyCLvZDcHkfM.jpg" 
-                                            alt="Apex AI" 
+                                            alt="Skillora AI" 
                                         />
                                         <motion.span
                                             animate={{
@@ -275,7 +275,7 @@ export default function FullSidebar({ onClearChat }) {
                                             }}
                                             className="text-neutral-700 dark:text-neutral-200 text-lg font-bold whitespace-pre"
                                         >
-                                            Apex
+                                            Skillora
                                         </motion.span>
                                     </div>
                                 ),

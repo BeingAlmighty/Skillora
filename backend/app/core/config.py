@@ -3,7 +3,7 @@ from typing import List
 import os
 
 class Settings(BaseSettings):
-    PROJECT_NAME: str = "Apex Career Navigator API"
+    PROJECT_NAME: str = "Skillora Career Navigator API"
     VERSION: str = "1.0.0"
     API_V1_STR: str = "/api/v1"
     DATABASE_URL: str = "postgresql+psycopg2://postgres.brmmypqwwibrsfxiykce:itachi%406388%26%26@aws-0-ap-northeast-2.pooler.supabase.com:5432/postgres"
