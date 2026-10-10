@@ -1,7 +1,6 @@
 import Landing from "./components/pages/Landing"
 import Zenith from "./components/pages/Zenith"
 import Profile from "./components/pages/Profile"
-import JobWishlist from "./components/pages/JobWishlist"
 import Skills from "./components/pages/Skills"
 import Vector from "./components/pages/Vector"
 import ResumeAnalysis from "./components/pages/ResumeAnalysis"
@@ -23,7 +22,6 @@ function App() {
       <Route path="/vector" element={<ProtectedRoute><Vector /></ProtectedRoute>} />
       <Route path="/zenith" element={<ProtectedRoute><Zenith /></ProtectedRoute>} />
       <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
-      <Route path="/wishlist" element={<ProtectedRoute><JobWishlist /></ProtectedRoute>} />
       <Route path="/skills" element={<ProtectedRoute><Skills /></ProtectedRoute>} />
       <Route path="/resume" element={<ProtectedRoute><ResumeAnalysis /></ProtectedRoute>} />
 

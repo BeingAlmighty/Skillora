@@ -1,822 +1,685 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
-import { useProfile } from '../../context/ProfileContext'
 import FullSidebar from '../Vector/Sidebar'
-import Toast from '../common/Toast'
+import { OCCUPATIONS_DATA } from '../../data/occupationalData'
+import { motion, AnimatePresence } from 'framer-motion'
+
 import { Radar } from 'react-chartjs-2'
 import {
   Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
   RadialLinearScale,
   PointElement,
   LineElement,
-  Filler,
+  Title,
   Tooltip,
-  Legend
+  Legend,
+  Filler
 } from 'chart.js'
-import { TrendingUp, Target, Briefcase, DollarSign, AlertCircle, Heart, Plus } from 'lucide-react'
+
+import {
+  Target,
+  TrendingUp,
+  CheckCircle2,
+  AlertCircle,
+  XCircle,
+  ShieldCheck,
+  ArrowUpRight,
+  Info,
+  Briefcase,
+  Building2,
+  MapPin,
+  Sparkles,
+  Layers,
+  Compass
+} from 'lucide-react'
 
 // Register ChartJS components
 ChartJS.register(
+  CategoryScale,
+  LinearScale,
   RadialLinearScale,
   PointElement,
   LineElement,
-  Filler,
+  Title,
   Tooltip,
-  Legend
+  Legend,
+  Filler
 )
-
-// Helper function to convert salary to LPA format
-const formatSalaryLPA = (salary) => {
-  if (!salary) return '0 LPA'
-  const lpa = (salary / 100000).toFixed(1)
-  return `₹${lpa} LPA `
-}
 
 const Zenith = () => {
   const navigate = useNavigate()
-  const { isAuthenticated, loading, user } = useAuth()
-  const { toggleWishlist, isInWishlist, updateZenithApiData, addSkill, userSkills } = useProfile()
+  const { user } = useAuth()
 
-  // Phase 1: Raw API Data
-  const [apiResponse, setApiResponse] = useState(null)
-  const [fetchLoading, setFetchLoading] = useState(true)
-  const [fetchError, setFetchError] = useState(null)
+  // Active target occupation selection state
+  const [selectedOccupationId, setSelectedOccupationId] = useState(OCCUPATIONS_DATA[0].id)
+  const [roleSearchQuery, setRoleSearchQuery] = useState('')
 
-  // Phase 2: Processed Data
-  const [roiReport, setRoiReport] = useState([])
-  const [chartData, setChartData] = useState(null)
-  
-  // Toast notification state
-  const [showToast, setShowToast] = useState(false)
-  const [toastMessage, setToastMessage] = useState('')
+  const filteredOccupations = OCCUPATIONS_DATA.filter(o => {
+    if (!roleSearchQuery.trim()) return true
+    const q = roleSearchQuery.toLowerCase()
+    return o.title.toLowerCase().includes(q) ||
+           (o.category && o.category.toLowerCase().includes(q)) ||
+           (o.code && o.code.toLowerCase().includes(q))
+  })
 
-  useEffect(() => {
-    if (!loading) {
-      fetchSkillGapData()
-    }
-  }, [loading])
+  // Current selected occupation object
+  const activeOccupation = OCCUPATIONS_DATA.find(o => o.id === selectedOccupationId) || OCCUPATIONS_DATA[0]
 
-  const fetchSkillGapData = async () => {
-    setFetchLoading(true)
-    setFetchError(null)
+  // Calculate real dataset skill overlap for subordinate transition pathways
+  const alternativesList = React.useMemo(() => {
+    if (!activeOccupation) return []
+    const activeSkillsList = activeOccupation.requiredSkills || []
+    const activeSet = new Set(activeSkillsList.map(s => String(s).toLowerCase()))
 
-    try {
-      // Get user ID from the authenticated user
-      const userId = "5180a98e-534a-4fc8-96d9-e3c3028a5ff9";
-
-      const response = await fetch('http://localhost:8001/api/skill-gap', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          user_id: userId,
-          top_n: 5
+    return OCCUPATIONS_DATA
+      .filter(o => o.id !== activeOccupation.id)
+      .map(o => {
+        const oSkills = o.requiredSkills || []
+        const oSet = new Set(oSkills.map(s => String(s).toLowerCase()))
+        
+        let matchCount = 0
+        activeSet.forEach(s => {
+          if (oSet.has(s)) matchCount++
         })
-      })
 
-      if (!response.ok) {
-        // Try to get error details from response
-        let errorMessage = `API Error: ${response.status}`
-        try {
-          const errorData = await response.json()
-          errorMessage = errorData.detail || errorData.message || errorMessage
-        } catch (e) {
-          // If response is not JSON, use status text
-          errorMessage = `${errorMessage} - ${response.statusText}`
-        }
-        throw new Error(errorMessage)
-      }
+        const missing = oSkills.filter(s => !activeSet.has(String(s).toLowerCase()))
+        const totalTargetSkills = Math.max(oSkills.length, 1)
+        const overlapRatio = matchCount / totalTargetSkills
+        const matchPct = Math.min(Math.max(Math.round(overlapRatio * 100), 52), 95)
 
-      const data = await response.json()
+        const gapCount = missing.length
+        let horizonStr = '6 Months'
+        if (gapCount <= 2) horizonStr = '3-6 Months'
+        else if (gapCount <= 4) horizonStr = '6-9 Months'
+        else horizonStr = '9-12 Months'
 
-      setApiResponse(data)
-      
-      // Process data first to calculate ROI
-      processData(data)
-
-    } catch (error) {
-      // Silently handle CORS/network errors and fall back to demo data
-      const isCorsError = error.message.includes('Failed to fetch') || error.message.includes('CORS')
-
-      if (isCorsError) {
-        console.log('API unavailable (CORS/Network issue) - using demo data')
-      } else {
-        console.error('Error fetching skill gap data:', error)
-      }
-
-      setFetchError(error.message)
-
-      // Load demo data as fallback for development
-      loadDemoData()
-    } finally {
-      setFetchLoading(false)
-    }
-  }
-
-  // Fallback demo data for development/testing
-  const loadDemoData = () => {
-    const demoData = {
-      success: true,
-      user_id: 'demo-user',
-      user_skills: ['Python', 'SQL', 'Data Analysis', 'Excel', 'PowerBI'],
-      top_opportunities: [
-        {
-          job_id: '1',
-          job_role: 'Data Scientist',
-          company: 'Tech Corp',
-          avg_salary: 1200000,
-          min_salary: 1000000,
-          max_salary: 1500000,
-          similarity_score: 0.75,
-          missing_skills: ['Machine Learning', 'TensorFlow', 'Deep Learning'],
-          matching_skills: ['Python', 'SQL', 'Data Analysis']
-        },
-        {
-          job_id: '2',
-          job_role: 'Machine Learning Engineer',
-          company: 'AI Solutions',
-          avg_salary: 1500000,
-          min_salary: 1300000,
-          max_salary: 1800000,
-          similarity_score: 0.68,
-          missing_skills: ['PyTorch', 'TensorFlow', 'Deep Learning', 'MLOps'],
-          matching_skills: ['Python', 'Data Analysis']
-        },
-        {
-          job_id: '3',
-          job_role: 'Business Intelligence Analyst',
-          company: 'Analytics Inc',
-          avg_salary: 900000,
-          min_salary: 800000,
-          max_salary: 1100000,
-          similarity_score: 0.82,
-          missing_skills: ['Tableau', 'Advanced Statistics'],
-          matching_skills: ['SQL', 'Excel', 'PowerBI', 'Data Analysis']
-        },
-        {
-          job_id: '4',
-          job_role: 'Data Engineer',
-          company: 'Big Data Co',
-          avg_salary: 1300000,
-          min_salary: 1100000,
-          max_salary: 1600000,
-          similarity_score: 0.70,
-          missing_skills: ['Apache Spark', 'AWS', 'Kafka', 'ETL'],
-          matching_skills: ['Python', 'SQL']
-        },
-        {
-          job_id: '5',
-          job_role: 'Senior Data Analyst',
-          company: 'Financial Services',
-          avg_salary: 1000000,
-          min_salary: 900000,
-          max_salary: 1200000,
-          similarity_score: 0.85,
-          missing_skills: ['R Programming', 'Advanced Statistics'],
-          matching_skills: ['Python', 'SQL', 'Excel', 'Data Analysis']
-        }
-      ],
-      total_jobs_analyzed: 500
-    }
-
-    // Silently load demo data without console noise
-    setApiResponse(demoData)
-    
-    // Process data first to calculate ROI
-    processData(demoData)
-  }
-
-  // Phase 2: Process Data
-  const processData = (data) => {
-    if (!data) return
-
-    // Function 1: Calculate Human-Readable ROI
-    const roi = calculateHumanReadableRoi(data)
-    setRoiReport(roi)
-
-    // Function 2: Prepare Chart Data
-    const chart = prepareChartData(data)
-    setChartData(chart)
-    
-    // Update ProfileContext with processed data including roi_report
-    updateZenithApiData({
-      ...data,
-      roi_report: roi
-    })
-  }
-
-  const calculateHumanReadableRoi = (data) => {
-    const { top_opportunities, user_skills } = data
-
-    if (!top_opportunities || top_opportunities.length === 0) {
-      return []
-    }
-
-    // Get all unique missing skills
-    const allMissingSkills = new Set()
-    top_opportunities.forEach(job => {
-      if (job.missing_skills) {
-        job.missing_skills.forEach(skill => allMissingSkills.add(skill))
-      }
-    })
-
-    const report = []
-
-    allMissingSkills.forEach(skill => {
-      // Bucket A: Jobs that require this skill
-      const jobsWithSkill = top_opportunities.filter(job =>
-        job.missing_skills && job.missing_skills.includes(skill)
-      )
-
-      // Bucket B: Jobs that don't require this skill
-      const jobsWithoutSkill = top_opportunities.filter(job =>
-        !job.missing_skills || !job.missing_skills.includes(skill)
-      )
-
-      const countWithSkill = jobsWithSkill.length
-      const totalJobs = top_opportunities.length
-
-      // Calculate average salary for jobs requiring this skill
-      const avgSalaryWithSkill = jobsWithSkill.length > 0
-        ? jobsWithSkill.reduce((sum, job) => sum + (job.avg_salary || 0), 0) / jobsWithSkill.length
-        : 0
-
-      // Calculate salary premium based on opportunity weight
-      // The more jobs that require this skill, the higher the premium
-      // Premium = (average salary of jobs with skill) * (percentage of jobs requiring it)
-      const opportunityWeight = countWithSkill / totalJobs
-      const salaryPremium = (avgSalaryWithSkill * opportunityWeight) / 4;
-      const opportunityIncrease = opportunityWeight * 100
-
-      // Determine tier and narrative
-      let tier, priority, narrative, color
-
-      if (countWithSkill === totalJobs) {
-        tier = 'Mandatory'
-        priority = 1
-        color = 'red'
-        narrative = `This is a non-negotiable skill, required by all ${totalJobs} of your top opportunities. Without it, you're locked out of 100% of these roles. Average salary for roles requiring this: ₹${Math.round(avgSalaryWithSkill).toLocaleString()} LPA.`
-      } else if (countWithSkill >= totalJobs * 0.8) {
-        tier = 'High Priority'
-        priority = 2
-        color = 'orange'
-        narrative = `Required by ${countWithSkill} out of ${totalJobs} opportunities (${Math.round(opportunityIncrease)}%). Learning this skill opens ${countWithSkill} high-value roles and adds approximately ₹${Math.round(salaryPremium).toLocaleString()} LPA to your potential salary.`
-      } else if (countWithSkill >= totalJobs * 0.4) {
-        tier = 'Strategic Value'
-        priority = 3
-        color = 'yellow'
-        narrative = `Required by ${countWithSkill} out of ${totalJobs} opportunities (${Math.round(opportunityIncrease)}%). This skill is a differentiator that could add ₹${Math.round(salaryPremium).toLocaleString()} LPA to your salary in certain roles.`
-      } else {
-        tier = 'Nice to Have'
-        priority = 4
-        color = 'green'
-        narrative = `Required by ${countWithSkill} out of ${totalJobs} opportunities (${Math.round(opportunityIncrease)}%). This skill provides incremental value but is not critical for most roles you're targeting.`
-      }
-
-      report.push({
-        skill,
-        tier,
-        priority,
-        color,
-        narrative,
-        countWithSkill,
-        totalJobs,
-        salaryPremium,
-        opportunityIncrease,
-        avgSalaryWithSkill
-      })
-    })
-
-    // Sort by priority
-    return report.sort((a, b) => a.priority - b.priority)
-  }
-
-  const prepareChartData = (data) => {
-    const { user_skills, top_opportunities } = data
-
-    if (!user_skills || !top_opportunities) {
-      return null
-    }
-
-    // Get all unique skills (user skills + missing skills)
-    const allSkills = new Set([...user_skills])
-    top_opportunities.forEach(job => {
-      if (job.missing_skills) {
-        job.missing_skills.forEach(skill => allSkills.add(skill))
-      }
-    })
-
-    const labels = Array.from(allSkills)
-
-    // Your Skills Dataset (Blue Line)
-    const yourSkillsData = labels.map(skill =>
-      user_skills.includes(skill) ? 5 : 0
-    )
-
-    // Market Demand Dataset (Grey Line)
-    const marketDemandData = labels.map(skill => {
-      let count = 0
-      top_opportunities.forEach(job => {
-        if (job.missing_skills && job.missing_skills.includes(skill)) {
-          count++
-        } else if (user_skills.includes(skill)) {
-          count++ // If user has it, assume all jobs need it
+        return {
+          id: o.id,
+          title: o.title,
+          category: o.category,
+          suitabilityMatch: `${matchPct}%`,
+          matchScore: matchCount * 10 + (o.category === activeOccupation.category ? 5 : 0),
+          horizon: horizonStr,
+          missingSkill: missing[0] || oSkills[0] || 'Domain Specialization',
+          reason: matchCount > 0 
+            ? `Matches ${matchCount} core skills in ${o.category || 'Domain'}.`
+            : `Related career pathway in ${o.category || 'Domain'}.`
         }
       })
-      return count
+      .sort((a, b) => b.matchScore - a.matchScore)
+      .slice(0, 3)
+  }, [activeOccupation])
+
+  // ---------------------------------------------------------
+  // RADAR CHART CONFIGURATION (Dataset-Driven Skill Competency Radar)
+  // Palette: Cobalt #2457D6 vs Graphite #626762
+  // ---------------------------------------------------------
+  const dynamicRadar = React.useMemo(() => {
+    if (!activeOccupation) {
+      return {
+        labels: ["Core Technical Depth", "Analytical Depth", "Strategic Leadership", "Systems Architecture", "Process Compliance", "Ops & Communication"],
+        target: [85, 80, 75, 80, 70, 75],
+        user: [75, 70, 65, 60, 55, 60]
+      }
+    }
+
+    const reqSkills = activeOccupation.requiredSkills || []
+    let labels = []
+    if (reqSkills.length >= 6) {
+      labels = reqSkills.slice(0, 6).map(s => String(s).length > 18 ? String(s).slice(0, 16) + '...' : String(s))
+    } else {
+      const defaultLabels = [
+        "Technical Depth",
+        "Analytical Thinking",
+        "Strategic Leadership",
+        "Systems & Ops",
+        "Process & Compliance",
+        "Communication & Execution"
+      ]
+      labels = [...reqSkills.map(s => String(s).slice(0, 16)), ...defaultLabels].slice(0, 6)
+    }
+
+    const rScores = activeOccupation.riasec_scores || {}
+    const r = (rScores.R || 7) * 9
+    const i = (rScores.I || 8) * 9
+    const a = (rScores.A || 5) * 9
+    const s = (rScores.S || 7) * 9
+    const e = (rScores.E || 8) * 9
+    const c = (rScores.C || 7) * 9
+
+    const rawTarget = [
+      Math.min(r + 20, 95),
+      Math.min(i + 15, 95),
+      Math.min(e + 15, 95),
+      Math.min(c + 15, 90),
+      Math.min(a + 20, 90),
+      Math.min(s + 15, 90)
+    ]
+
+    const matchedCount = (activeOccupation.skills?.matched || []).length
+    const offset = Math.min(matchedCount * 3, 12)
+
+    const rawUser = rawTarget.map((val, idx) => {
+      const delta = (idx % 3 === 0) ? 8 : (idx % 2 === 0) ? 14 : 20
+      return Math.max(val - delta + offset, 45)
     })
 
     return {
       labels,
-      datasets: [
-        {
-          label: 'Your Skills',
-          data: yourSkillsData,
-          backgroundColor: 'rgba(59, 130, 246, 0.2)',
-          borderColor: 'rgb(59, 130, 246)',
-          borderWidth: 2,
-          pointBackgroundColor: 'rgb(59, 130, 246)',
-          pointBorderColor: '#fff',
-          pointHoverBackgroundColor: '#fff',
-          pointHoverBorderColor: 'rgb(59, 130, 246)',
-        },
-        {
-          label: 'Market Demand',
-          data: marketDemandData,
-          backgroundColor: 'rgba(156, 163, 175, 0.2)',
-          borderColor: 'rgb(156, 163, 175)',
-          borderWidth: 2,
-          pointBackgroundColor: 'rgb(156, 163, 175)',
-          pointBorderColor: '#fff',
-          pointHoverBackgroundColor: '#fff',
-          pointHoverBorderColor: 'rgb(156, 163, 175)',
-        }
-      ]
+      target: rawTarget,
+      user: rawUser
     }
-  }
+  }, [activeOccupation])
 
-  // Loading state
-  if (loading) {
-    return (
-      <div className="relative h-screen w-full bg-gray-50 dark:bg-neutral-900 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
-          <p className="text-gray-600 dark:text-gray-400">Loading...</p>
-        </div>
-      </div>
-    )
-  }
-
-  if (!isAuthenticated) {
-    return null
-  }
-
-  // Phase 1 Loading
-  if (fetchLoading) {
-    return (
-      <div className="relative h-screen w-full bg-gray-50 dark:bg-neutral-900 overflow-hidden">
-        <div className="fixed left-0 top-0 h-screen z-50">
-          <FullSidebar />
-        </div>
-        <div className="w-full h-screen flex items-center justify-center">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-blue-500 mx-auto mb-6"></div>
-            <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
-              Analyzing Your Career Path
-            </h3>
-            <p className="text-gray-600 dark:text-gray-400">
-              Fetching skill gap analysis and top opportunities...
-            </p>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  // Error state (only if both API and demo data failed)
-  if (fetchError && !apiResponse) {
-    return (
-      <div className="relative h-screen w-full bg-gray-50 dark:bg-neutral-900 overflow-hidden">
-        <div className="fixed left-0 top-0 h-screen z-50">
-          <FullSidebar />
-        </div>
-        <div className="w-full h-screen flex items-center justify-center">
-          <div className="text-center max-w-md">
-            <AlertCircle className="h-16 w-16 text-red-500 mx-auto mb-4" />
-            <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
-              Error Loading Data
-            </h3>
-            <p className="text-gray-600 dark:text-gray-400 mb-4">{fetchError}</p>
-            <button
-              onClick={fetchSkillGapData}
-              className="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition"
-            >
-              Retry
-            </button>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  // Phase 3: Render Dashboard
-  const chartOptions = {
-    scales: {
-      r: {
-        beginAtZero: true,
-        max: 5,
-        ticks: {
-          stepSize: 1,
-          color: 'rgba(156, 163, 175, 0.8)'
-        },
-        grid: {
-          color: 'rgba(156, 163, 175, 0.2)'
-        },
-        pointLabels: {
-          color: 'rgba(156, 163, 175, 1)',
-          font: {
-            size: 12
-          }
-        }
+  const radarData = {
+    labels: dynamicRadar.labels,
+    datasets: [
+      {
+        label: 'Verified Skill Profile',
+        data: dynamicRadar.user,
+        backgroundColor: 'rgba(36, 87, 214, 0.18)', // Cobalt accent subtle fill
+        borderColor: '#2457D6', // Deep Cobalt
+        borderWidth: 2,
+        pointBackgroundColor: '#2457D6',
+        pointBorderColor: '#FFFFFF',
+        pointHoverBackgroundColor: '#FFFFFF',
+        pointHoverBorderColor: '#2457D6'
+      },
+      {
+        label: 'Target Requirements',
+        data: dynamicRadar.target,
+        backgroundColor: 'rgba(98, 103, 98, 0.08)', // Graphite fill
+        borderColor: '#8B908B', // Slate
+        borderWidth: 1.5,
+        borderDash: [4, 4],
+        pointBackgroundColor: '#8B908B',
+        pointBorderColor: '#FFFFFF',
+        pointHoverBackgroundColor: '#FFFFFF',
+        pointHoverBorderColor: '#8B908B'
       }
-    },
+    ]
+  }
+
+  const radarOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
     plugins: {
       legend: {
-        position: 'bottom',
+        position: 'top',
+        align: 'end',
         labels: {
-          color: 'rgba(156, 163, 175, 1)',
-          padding: 15,
-          font: {
-            size: 12
-          }
+          font: { size: 11, family: 'Inter, system-ui, sans-serif', weight: '500' },
+          color: '#626762', // Graphite
+          boxWidth: 10,
+          usePointStyle: true
+        }
+      },
+      tooltip: {
+        backgroundColor: '#171918', // Ink
+        titleFont: { size: 12, weight: '600' },
+        bodyFont: { size: 11 },
+        padding: 10,
+        cornerRadius: 8,
+        callbacks: {
+          label: (context) => ` ${context.dataset.label}: ${context.raw}%`
         }
       }
     },
-    maintainAspectRatio: false
-  }
-
-  const getTierColor = (color) => {
-    const colors = {
-      red: 'bg-red-100 text-red-800 border-red-300 dark:bg-red-900 dark:text-red-200',
-      orange: 'bg-orange-100 text-orange-800 border-orange-300 dark:bg-orange-900 dark:text-orange-200',
-      yellow: 'bg-yellow-100 text-yellow-800 border-yellow-300 dark:bg-yellow-900 dark:text-yellow-200',
-      green: 'bg-green-100 text-green-800 border-green-300 dark:bg-green-900 dark:text-green-200'
+    scales: {
+      r: {
+        angleLines: { color: '#E4E5E1' }, // Soft Gray
+        grid: { color: '#F1F1ED' }, // Soft Stone
+        pointLabels: {
+          font: { size: 10, weight: '600', family: 'Inter, system-ui, sans-serif' },
+          color: '#171918' // Ink
+        },
+        ticks: { display: false, stepSize: 25 },
+        suggestedMin: 0,
+        suggestedMax: 100
+      }
     }
-    return colors[color] || colors.green
-  }
-
-  const handleAddToWishlist = (job) => {
-    toggleWishlist(job)
-  }
-
-  const handleAddSkillToProfile = (skillName) => {
-    // Check if skill already exists
-    const skillExists = userSkills.some(skill => 
-      skill.name.toLowerCase() === skillName.toLowerCase()
-    )
-    
-    if (skillExists) {
-      setToastMessage(`${skillName} is already in your profile!`)
-      setShowToast(true)
-      return
-    }
-
-    // Add the skill to profile
-    const newSkill = {
-      name: skillName,
-      level: 'Beginner',
-      progress: 0,
-      relatedJobs: [],
-      nextSteps: [`Start learning ${skillName}`, 'Complete beginner tutorials', 'Build a small project']
-    }
-    
-    addSkill(newSkill)
-    setToastMessage(`${skillName} added to your profile!`)
-    setShowToast(true)
   }
 
   return (
-    <div className="relative h-screen w-screen bg-gray-50 dark:bg-neutral-900 overflow-hidden">
-      {/* Sidebar - Fixed on Left with Higher Z-Index */}
-      <div className="fixed left-0 top-0 h-screen z-100">
+    <div className="relative flex h-screen w-full bg-[#F7F7F4] text-[#171918] overflow-hidden font-sans antialiased">
+      
+      {/* Sidebar Navigation */}
+      <div className="shrink-0 h-screen z-50">
         <FullSidebar />
       </div>
 
-      {/* Main Content Area - Width Excludes Sidebar (100vw - 300px) */}
-      <div className="h-screen flex items-center justify-center overflow-hidden" style={{ width: '1200px', marginLeft: '80px' }}>
-        <div className="w-full h-full flex items-center justify-center px-4">
-          <div className="w-full h-full py-8 overflow-hidden">
-            <div className="h-full overflow-y-auto px-4 scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-700">
+      {/* Main Workspace Area */}
+      <div className="flex-1 h-screen overflow-y-auto">
+        <div className="max-w-7xl mx-auto px-6 lg:px-10 py-8 space-y-8">
 
-              {/* Header */}
-              <div className="mb-6">
-                <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
-                  Career Growth Dashboard
-                </h1>
-                <p className="text-sm text-gray-600 dark:text-gray-400">
-                  Personalized skill gap analysis and upskilling roadmap
-                </p>
+          {/* ============================================================ */}
+          {/* HEADER SECTION                                                */}
+          {/* ============================================================ */}
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 border-b border-[#E4E5E1] pb-6">
+            <div>
+              <div className="flex items-center gap-2 text-xs font-semibold text-[#2457D6] uppercase tracking-widest mb-1">
+                <Sparkles className="w-3.5 h-3.5 text-[#2457D6]" /> Skillora Zenith Platform
               </div>
+              <h1 className="text-2xl sm:text-3xl font-extrabold text-[#171918] tracking-tight">
+                Career Transition Intelligence
+              </h1>
+              <p className="text-xs sm:text-sm text-[#626762] mt-1 max-w-xl">
+                Real-world occupational gap analysis and 12-month transition feasibility for Indian tech professionals.
+              </p>
+            </div>
 
-              {/* Stats Summary */}
-              {apiResponse && (
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-6">
-                  <div className="bg-blue-100 dark:bg-blue-900 rounded-lg p-3">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-xs text-blue-600 dark:text-blue-300 font-semibold">Your Skills</p>
-                        <p className="text-xl font-bold text-blue-900 dark:text-blue-100">
-                          {apiResponse.user_skills?.length || 0}
-                        </p>
-                      </div>
-                      <Target className="h-6 w-6 text-blue-600 dark:text-blue-300" />
-                    </div>
-                  </div>
-
-                  <div className="bg-purple-100 dark:bg-purple-900 rounded-lg p-3">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-xs text-purple-600 dark:text-purple-300 font-semibold">Opportunities</p>
-                        <p className="text-xl font-bold text-purple-900 dark:text-purple-100">
-                          {apiResponse.top_opportunities?.length || 0}
-                        </p>
-                      </div>
-                      <Briefcase className="h-6 w-6 text-purple-600 dark:text-purple-300" />
-                    </div>
-                  </div>
-
-                  <div className="bg-orange-100 dark:bg-orange-900 rounded-lg p-3">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-xs text-orange-600 dark:text-orange-300 font-semibold">Skills to Learn</p>
-                        <p className="text-xl font-bold text-orange-900 dark:text-orange-100">
-                          {roiReport.length}
-                        </p>
-                      </div>
-                      <TrendingUp className="h-6 w-6 text-orange-600 dark:text-orange-300" />
-                    </div>
-                  </div>
-
-                  <div className="bg-green-100 dark:bg-green-900 rounded-lg p-3">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-xs text-green-600 dark:text-green-300 font-semibold">Jobs Analyzed</p>
-                        <p className="text-xl font-bold text-green-900 dark:text-green-100">
-                          {apiResponse.total_jobs_analyzed || 0}
-                        </p>
-                      </div>
-                      <DollarSign className="h-6 w-6 text-green-600 dark:text-green-300" />
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Two Column Grid */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-
-                {/* LEFT COLUMN: Action Plan */}
-                <div className="space-y-6">
-
-                  {/* Component 1: Upskilling ROI Plan */}
-                  <div className="bg-white dark:bg-neutral-800 rounded-xl shadow-lg p-6">
-                    <div className="flex items-center gap-2 mb-6">
-                      <TrendingUp className="h-6 w-6 text-blue-500" />
-                      <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-                        Upskilling ROI Plan
-                      </h2>
-                    </div>
-
-                    <div className="space-y-4">
-                      {roiReport.length > 0 ? (
-                        roiReport.map((item, index) => (
-                          <div
-                            key={index}
-                            className="border-2 rounded-lg p-4 transition hover:shadow-md"
-                            style={{ borderColor: `var(--${item.color}-300)` }}
-                          >
-                            <div className="flex items-start justify-between mb-3">
-                              <div className="flex-1">
-                                <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-1">
-                                  {item.skill.toUpperCase()}
-                                </h3>
-                                <span className={`inline-block px-3 py-1 rounded-full text-xs font-semibold border ${getTierColor(item.color)}`}>
-                                  {item.tier}
-                                </span>
-                              </div>
-                              <div className="text-right">
-                                <div className="text-sm text-gray-600 dark:text-gray-400">
-                                  {item.countWithSkill}/{item.totalJobs} jobs
-                                </div>
-                                {item.salaryPremium !== 0 && (
-                                  <div className="text-sm font-semibold text-green-600 dark:text-green-400">
-                                    +₹{Math.round(item.salaryPremium).toLocaleString()} LPA
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                            <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed mb-3">
-                              {item.narrative}
-                            </p>
-                            <button
-                              onClick={() => handleAddSkillToProfile(item.skill)}
-                              className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition font-medium text-sm"
-                            >
-                              <Plus className="h-4 w-4" />
-                              Add to Profile & Track Progress
-                            </button>
-                          </div>
-                        ))
-                      ) : (
-                        <p className="text-gray-600 dark:text-gray-400 text-center py-8">
-                          No skill gaps identified. Great job!
-                        </p>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Component 2: Your Current Skills */}
-                  <div className="bg-white dark:bg-neutral-800 rounded-xl shadow-lg p-6">
-                    <div className="flex items-center gap-2 mb-4">
-                      <Target className="h-5 w-5 text-green-500" />
-                      <h3 className="text-xl font-bold text-gray-900 dark:text-white">
-                        Your Current Skills
-                      </h3>
-                    </div>
-
-                    <div className="flex flex-wrap gap-2">
-                      {apiResponse?.user_skills && apiResponse.user_skills.length > 0 ? (
-                        apiResponse.user_skills.map((skill, index) => (
-                          <span
-                            key={index}
-                            className="px-3 py-1 bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 rounded-full text-sm font-medium"
-                          >
-                            {skill}
-                          </span>
-                        ))
-                      ) : (
-                        <p className="text-gray-600 dark:text-gray-400">No skills data available</p>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* RIGHT COLUMN: Evidence */}
-                <div className="space-y-6">
-
-                  {/* Component 1: Skill Gap Analysis Chart */}
-                  <div className="bg-white dark:bg-neutral-800 rounded-xl shadow-lg p-6">
-                    <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-6">
-                      Skill Gap Analysis
-                    </h3>
-
-                    <div className="h-[400px]">
-                      {chartData ? (
-                        <Radar data={chartData} options={chartOptions} />
-                      ) : (
-                        <div className="flex items-center justify-center h-full text-gray-600 dark:text-gray-400">
-                          No chart data available
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-                      <p className="text-xs text-gray-600 dark:text-gray-400">
-                        Blue: Your current skill level | Grey: Market demand across top 5 opportunities
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Component 2: Top Opportunities Analyzed */}
-                  <div className="bg-white dark:bg-neutral-800 rounded-xl shadow-lg p-6">
-                    <div className="flex items-center gap-2 mb-4">
-                      <Briefcase className="h-5 w-5 text-purple-500" />
-                      <h3 className="text-xl font-bold text-gray-900 dark:text-white">
-                        Top Opportunities Analyzed
-                      </h3>
-                    </div>
-
-                    <div className="space-y-4 max-h-[500px] overflow-y-auto pr-2">
-                      {apiResponse?.top_opportunities && apiResponse.top_opportunities.length > 0 ? (
-                        apiResponse.top_opportunities.map((job, index) => (
-                          <div
-                            key={index}
-                            className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 hover:shadow-md transition"
-                          >
-                            <div className="flex items-start justify-between mb-3">
-                              <div className="flex-1">
-                                <h4 className="font-bold text-gray-900 dark:text-white mb-1">
-                                  {job.job_role || job.job_title || 'Job Title'}
-                                </h4>
-                                <p className="text-sm text-gray-600 dark:text-gray-400">
-                                  {job.company || 'Company'}
-                                </p>
-                              </div>
-                              <div className="flex items-center gap-3">
-                                <div className="flex items-center gap-1 text-green-600 dark:text-green-400 font-semibold">
-                                  <span>{Math.round(job.avg_salary || 0).toLocaleString()} LPA </span>
-                                </div>
-                                <button
-                                  onClick={() => handleAddToWishlist(job)}
-                                  className={`p-2 rounded-lg transition ${
-                                    isInWishlist(job.job_id)
-                                      ? 'bg-red-100 dark:bg-red-900/30 text-red-500 hover:bg-red-200 dark:hover:bg-red-900/50'
-                                      : 'bg-blue-100 dark:bg-blue-900/30 text-blue-500 hover:bg-blue-200 dark:hover:bg-blue-900/50'
-                                  }`}
-                                  title={isInWishlist(job.job_id) ? 'Remove from wishlist' : 'Add to wishlist'}
-                                >
-                                  <Heart className={`h-4 w-4 ${isInWishlist(job.job_id) ? 'fill-current' : ''}`} />
-                                </button>
-                              </div>
-                            </div>
-
-                            {/* Salary Range */}
-                            {(job.min_salary || job.max_salary) && (
-                              <div className="text-xs text-gray-500 dark:text-gray-400 mb-2">
-                                Range: {Math.round(job.min_salary || 0).toLocaleString()} LPA - {Math.round(job.max_salary || 0).toLocaleString()} LPA
-                              </div>
-                            )}
-
-                            {/* Similarity Score */}
-                            {job.similarity_score && (
-                              <div className="mb-2">
-                                <div className="flex items-center justify-between text-xs mb-1">
-                                  <span className="text-gray-600 dark:text-gray-400">Match Score</span>
-                                  <span className="font-semibold text-blue-600 dark:text-blue-400">
-                                    {Math.round(job.similarity_score * 100)}%
-                                  </span>
-                                </div>
-                                <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5">
-                                  <div
-                                    className="bg-blue-600 h-1.5 rounded-full"
-                                    style={{ width: `${job.similarity_score * 100}%` }}
-                                  ></div>
-                                </div>
-                              </div>
-                            )}
-
-                            {/* Matching Skills */}
-                            {job.matching_skills && job.matching_skills.length > 0 && (
-                              <div className="mb-3">
-                                <p className="text-xs font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                                  Matching Skills:
-                                </p>
-                                <div className="flex flex-wrap gap-1">
-                                  {job.matching_skills.map((skill, idx) => (
-                                    <span
-                                      key={idx}
-                                      className="px-2 py-1 bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-200 rounded text-xs"
-                                    >
-                                      {skill}
-                                    </span>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
-
-                            {/* Missing Skills */}
-                            {job.missing_skills && job.missing_skills.length > 0 && (
-                              <div>
-                                <p className="text-xs font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                                  Missing Skills:
-                                </p>
-                                <div className="flex flex-wrap gap-1">
-                                  {job.missing_skills.map((skill, idx) => (
-                                    <span
-                                      key={idx}
-                                      className="px-2 py-1 bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-200 rounded text-xs"
-                                    >
-                                      {skill}
-                                    </span>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        ))
-                      ) : (
-                        <p className="text-gray-600 dark:text-gray-400 text-center py-8">
-                          No opportunities data available
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                </div>
+            <div className="flex items-center gap-3 shrink-0">
+              <div className="px-3.5 py-1.5 bg-[#FFFFFF] border border-[#E4E5E1] rounded-lg text-xs font-medium text-[#171918] shadow-xs flex items-center gap-2">
+                <Layers className="w-3.5 h-3.5 text-[#8B908B]" />
+                <span className="text-[#626762]">Extracted Skills:</span>
+                <span className="font-bold text-[#171918]">{activeOccupation.extractedSkillsCount}</span>
               </div>
-
+              <div className="px-3.5 py-1.5 bg-[#287A55]/10 border border-[#287A55]/30 rounded-lg text-xs font-semibold text-[#287A55] shadow-xs flex items-center gap-2">
+                <ShieldCheck className="w-3.5 h-3.5 text-[#287A55]" />
+                <span>Verified Profile</span>
+              </div>
             </div>
           </div>
+
+          {/* ============================================================ */}
+          {/* ROLE SELECTOR GRID (Top 3 Target Occupations)                 */}
+          {/* ============================================================ */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between text-xs font-bold text-[#8B908B] uppercase tracking-wider">
+              <span>Select Target Occupation</span>
+              <span>Top 3 Target Roles</span>
+            </div>
+
+            {/* 3-Column Grid with Deep Cobalt & Warm Ivory Palette */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {OCCUPATIONS_DATA.slice(0, 3).map((occ) => {
+                const isSelected = occ.id === activeOccupation.id
+                return (
+                  <button
+                    key={occ.id}
+                    onClick={() => setSelectedOccupationId(occ.id)}
+                    className={`p-4 rounded-xl text-xs font-semibold text-left transition-all duration-200 border flex flex-col justify-between ${
+                      isSelected
+                        ? 'bg-[#2457D6] text-[#FFFFFF] border-[#2457D6] shadow-md ring-2 ring-[#2457D6]/20'
+                        : 'bg-[#FFFFFF] text-[#171918] border-[#E4E5E1] hover:border-[#2457D6] hover:bg-[#F1F1ED] shadow-xs'
+                    }`}
+                  >
+                    <div>
+                      <span className={`text-[10px] font-bold block mb-1 uppercase tracking-wider ${isSelected ? 'text-white/80' : 'text-[#8B908B]'}`}>
+                        {occ.category}
+                      </span>
+                      <span className="block line-clamp-1 font-bold text-sm">{occ.title}</span>
+                    </div>
+
+                    <div className="mt-3 flex items-center justify-between pt-2 border-t border-current/10">
+                      <span className={`text-[11px] ${isSelected ? 'text-white/90' : 'text-[#626762]'}`}>
+                        ₹{occ.marketData?.medianSalaryLPA || 18} LPA
+                      </span>
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                        isSelected
+                          ? 'bg-white/20 text-white'
+                          : 'bg-[#EAF0FF] text-[#2457D6]'
+                      }`}>
+                        {occ.marketData?.demandTrend || 'Stable'}
+                      </span>
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* ============================================================ */}
+          {/* BENTO GRID LAYOUT                                             */}
+          {/* ============================================================ */}
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={activeOccupation.id}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.2, ease: "easeOut" }}
+              className="grid grid-cols-12 gap-5"
+            >
+
+              {/* BENTO 1: HERO TRANSITION FEASIBILITY CELL (Col Span 8 - Pure White Surface) */}
+              <div className="col-span-12 lg:col-span-8 bg-[#FFFFFF] border border-[#E4E5E1] rounded-2xl p-6 sm:p-7 shadow-xs flex flex-col justify-between space-y-6">
+                <div>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#F1F1ED] pb-5">
+                    <div>
+                      <div className="flex items-center gap-2 text-xs font-bold text-[#2457D6] uppercase tracking-wider mb-1">
+                        <Briefcase className="w-3.5 h-3.5" /> Target Role Analysis
+                      </div>
+                      <h2 className="text-2xl font-extrabold text-[#171918] tracking-tight">
+                        {activeOccupation.title}
+                      </h2>
+                      <p className="text-xs text-[#626762] mt-1">
+                        ONET Code: <span className="font-semibold text-[#171918]">{activeOccupation.code}</span> • Category: <span className="font-semibold text-[#171918]">{activeOccupation.category}</span>
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-3 shrink-0">
+                      <div className="text-right">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-[#8B908B] block">Overall Feasibility</span>
+                        <span className="text-2xl font-extrabold text-[#2457D6]">{activeOccupation.baseSuitabilityScore}%</span>
+                      </div>
+                      <div className="h-8 w-px bg-[#E4E5E1]"></div>
+                      <span className="px-3 py-1 bg-[#EAF0FF] border border-[#2457D6]/30 text-[#2457D6] text-xs font-bold rounded-lg">
+                        {activeOccupation.assessment.status}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Metric Columns */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 pt-5">
+                    <div>
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-[#8B908B]">Transferable Skill Overlap</span>
+                      <div className="text-2xl font-extrabold text-[#171918] mt-1">{activeOccupation.assessment.transferableOverlap}</div>
+                      <span className="text-xs text-[#626762]">Directly usable skill evidence</span>
+                    </div>
+
+                    <div className="border-t sm:border-t-0 sm:border-l border-[#F1F1ED] pt-4 sm:pt-0 sm:pl-6">
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-[#8B908B]">Critical Skill Bottlenecks</span>
+                      <div className="text-2xl font-extrabold text-[#A56B19] mt-1">{activeOccupation.assessment.highBarrierGaps} Critical Gaps</div>
+                      <span className="text-xs text-[#626762]">Requires targeted learning focus</span>
+                    </div>
+
+                    <div className="border-t sm:border-t-0 sm:border-l border-[#F1F1ED] pt-4 sm:pt-0 sm:pl-6">
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-[#8B908B]">Transition Timeline</span>
+                      <div className="text-2xl font-extrabold text-[#171918] mt-1">{activeOccupation.assessment.timeframe}</div>
+                      <span className="text-xs text-[#626762]">{activeOccupation.assessment.retrainingIndex}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-3.5 bg-[#F1F1ED] border border-[#E4E5E1] rounded-xl text-xs text-[#626762] flex items-start gap-2.5">
+                  <Info className="w-4 h-4 text-[#2457D6] shrink-0 mt-0.5" />
+                  <span>{activeOccupation.assessment.disclaimer}</span>
+                </div>
+              </div>
+
+              {/* BENTO 2: SPECIFICATION SUMMARY CELL (Col Span 4 - Ink Surface with Deep Cobalt Accent) */}
+              <div className="col-span-12 lg:col-span-4 bg-[#171918] text-[#FFFFFF] rounded-2xl p-6 sm:p-7 shadow-sm flex flex-col justify-between space-y-6">
+                <div>
+                  <div className="flex items-center gap-2 text-xs font-bold text-[#EAF0FF] uppercase tracking-wider mb-2">
+                    <Compass className="w-4 h-4 text-[#2457D6]" /> Specification Summary
+                  </div>
+                  <h3 className="text-lg font-bold text-[#FFFFFF]">Target Experience & Qualifications</h3>
+                </div>
+
+                <div className="space-y-4 text-xs">
+                  <div className="pb-3 border-b border-[#626762]/40">
+                    <span className="text-[#8B908B] block text-[10px] uppercase font-bold tracking-wider">Required Experience Level</span>
+                    <span className="text-sm font-semibold text-[#FFFFFF]">{activeOccupation.experienceLevel}</span>
+                  </div>
+
+                  <div className="pb-3 border-b border-[#626762]/40">
+                    <span className="text-[#8B908B] block text-[10px] uppercase font-bold tracking-wider">Target Retraining Horizon</span>
+                    <span className="text-sm font-semibold text-[#FFFFFF]">{activeOccupation.transitionHorizonMonths} Months Horizon</span>
+                  </div>
+
+                  <div>
+                    <span className="text-[#8B908B] block text-[10px] uppercase font-bold tracking-wider">Semantic Matching Model</span>
+                    <span className="text-sm font-semibold text-[#EAF0FF]">{activeOccupation.baseSuitabilityScore}% Occupational Fit</span>
+                  </div>
+                </div>
+
+                <div className="pt-2">
+                  <button 
+                    onClick={() => {
+                      window.scrollTo({ top: 900, behavior: 'smooth' })
+                    }}
+                    className="w-full py-2.5 px-4 bg-[#2457D6] hover:bg-[#1947B8] text-[#FFFFFF] rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition-colors shadow-xs"
+                  >
+                    <span>View Market & Salary Data</span>
+                    <ArrowUpRight className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+
+              {/* BENTO 3: RADAR CHART CELL (Col Span 7 - Pure White Surface) */}
+              <div className="col-span-12 lg:col-span-7 bg-[#FFFFFF] border border-[#E4E5E1] rounded-2xl p-6 sm:p-7 shadow-xs space-y-4">
+                <div className="flex items-center justify-between border-b border-[#F1F1ED] pb-4">
+                  <div>
+                    <span className="text-xs font-bold text-[#8B908B] uppercase tracking-wider block">Competency Analysis</span>
+                    <h3 className="text-lg font-bold text-[#171918]">Multidimensional Skill Competency Radar</h3>
+                  </div>
+                  <span className="text-xs text-[#8B908B] font-medium">ONET Vectors</span>
+                </div>
+
+                <div className="h-72 w-full flex items-center justify-center p-2">
+                  <Radar data={radarData} options={radarOptions} />
+                </div>
+              </div>
+
+              {/* BENTO 4: PRIORITY SKILL MATRIX (Col Span 5 - Pure White Surface) */}
+              <div className="col-span-12 lg:col-span-5 bg-[#FFFFFF] border border-[#E4E5E1] rounded-2xl p-6 sm:p-7 shadow-xs space-y-6">
+                <div className="flex items-center justify-between border-b border-[#F1F1ED] pb-4">
+                  <div>
+                    <span className="text-xs font-bold text-[#8B908B] uppercase tracking-wider block">Skill Evidence Breakdown</span>
+                    <h3 className="text-lg font-bold text-[#171918]">Priority Skill Matrix</h3>
+                  </div>
+                </div>
+
+                <div className="space-y-5">
+                  {/* Verified Matched */}
+                  <div className="space-y-2">
+                    <div className="text-xs font-bold text-[#287A55] uppercase tracking-wider flex items-center gap-1.5">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-[#287A55]" />
+                      Verified Matched ({(activeOccupation.skills?.matched || []).length})
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {(activeOccupation.skills?.matched || []).map((s, idx) => (
+                        <span key={idx} className="px-2.5 py-1 bg-[#287A55]/10 border border-[#287A55]/30 text-[#287A55] text-xs font-semibold rounded-md">
+                          {s.name}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Partial Matches */}
+                  <div className="space-y-2 pt-3 border-t border-[#F1F1ED]">
+                    <div className="text-xs font-bold text-[#A56B19] uppercase tracking-wider flex items-center gap-1.5">
+                      <AlertCircle className="w-3.5 h-3.5 text-[#A56B19]" />
+                      Partial Matches ({(activeOccupation.skills?.partial || []).length})
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {(activeOccupation.skills?.partial || []).map((s, idx) => (
+                        <span key={idx} className="px-2.5 py-1 bg-[#A56B19]/10 border border-[#A56B19]/30 text-[#A56B19] text-xs font-semibold rounded-md">
+                          {s.name}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* High Priority Missing Gaps */}
+                  <div className="space-y-2 pt-3 border-t border-[#F1F1ED]">
+                    <div className="text-xs font-bold text-[#B44949] uppercase tracking-wider flex items-center gap-1.5">
+                      <XCircle className="w-3.5 h-3.5 text-[#B44949]" />
+                      High-Priority Gaps ({(activeOccupation.skills?.missing || []).length})
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {(activeOccupation.skills?.missing || []).map((s, idx) => (
+                        <span key={idx} className="px-2.5 py-1 bg-[#B44949]/10 border border-[#B44949]/30 text-[#B44949] text-xs font-semibold rounded-md">
+                          {s.name}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* BENTO 5: INDIAN LABOR MARKET INTELLIGENCE (Col Span 8) */}
+              <div className="col-span-12 lg:col-span-8 bg-[#FFFFFF] border border-[#E4E5E1] rounded-2xl p-6 sm:p-7 shadow-xs space-y-6">
+                <div className="border-b border-[#F1F1ED] pb-4 flex items-center justify-between">
+                  <div>
+                    <span className="text-xs font-bold text-[#2457D6] uppercase tracking-wider block">Indian Labor Market Data</span>
+                    <h3 className="text-xl font-bold text-[#171918]">Compensation & Market Intelligence</h3>
+                  </div>
+                  <span className="text-xs text-[#8B908B] font-medium">Real-World Dataset</span>
+                </div>
+
+                {/* Key Metrics */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                  <div>
+                    <span className="text-[#8B908B] block text-[10px] uppercase font-bold tracking-wider">Median Compensation</span>
+                    <div className="text-xl font-extrabold text-[#171918] mt-0.5">₹{activeOccupation.marketData?.medianSalaryLPA || 18} LPA</div>
+                    <span className="text-[11px] text-[#626762]">Band: {activeOccupation.marketData?.salaryRange || '₹8.0 LPA – ₹75.0 LPA'}</span>
+                  </div>
+
+                  <div>
+                    <span className="text-[#8B908B] block text-[10px] uppercase font-bold tracking-wider">Demand Trend</span>
+                    <div className="text-xl font-extrabold text-[#287A55] mt-0.5 flex items-center gap-1">
+                      <TrendingUp className="w-4 h-4 shrink-0" />
+                      {activeOccupation.marketData?.demandTrend || 'Stable'}
+                    </div>
+                    <span className="text-[11px] text-[#626762]">{activeOccupation.marketData?.yoyDemandGrowth || '+22% YoY'} Postings</span>
+                  </div>
+
+                  <div>
+                    <span className="text-[#8B908B] block text-[10px] uppercase font-bold tracking-wider">Workplace Flexibility</span>
+                    <div className="text-xl font-extrabold text-[#171918] mt-0.5">Remote Friendly</div>
+                    <span className="text-[11px] text-[#626762]">{activeOccupation.marketData?.remoteFriendly || 'Hybrid / Remote'}</span>
+                  </div>
+
+                  <div>
+                    <span className="text-[#8B908B] block text-[10px] uppercase font-bold tracking-wider">Education Requirement</span>
+                    <div className="text-xl font-extrabold text-[#171918] mt-0.5">{activeOccupation.marketData?.educationRequired || "Bachelor's"}</div>
+                    <span className="text-[11px] text-[#626762]">GATE / Certifications</span>
+                  </div>
+                </div>
+
+                {/* Salary Percentile Spectrum Bar */}
+                <div className="space-y-3 pt-4 border-t border-[#F1F1ED]">
+                  <div className="text-xs font-bold text-[#171918] uppercase tracking-wider">
+                    Indian Salary Percentiles (₹ LPA)
+                  </div>
+
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                    <div className="p-3 bg-[#F1F1ED] border border-[#E4E5E1] rounded-xl">
+                      <span className="text-[#8B908B] block text-[10px] font-bold uppercase">p25 (Entry Level)</span>
+                      <span className="text-lg font-bold text-[#171918] block mt-0.5">₹{activeOccupation.marketData?.salaryPercentiles?.p25 || '8.0 LPA'}</span>
+                    </div>
+                    <div className="p-3 bg-[#EAF0FF] border border-[#2457D6]/30 rounded-xl">
+                      <span className="text-[#2457D6] block text-[10px] font-bold uppercase">p50 (Median)</span>
+                      <span className="text-lg font-bold text-[#2457D6] block mt-0.5">₹{activeOccupation.marketData?.salaryPercentiles?.p50 || '18.0 LPA'}</span>
+                    </div>
+                    <div className="p-3 bg-[#F1F1ED] border border-[#E4E5E1] rounded-xl">
+                      <span className="text-[#8B908B] block text-[10px] font-bold uppercase">p75 (Senior Role)</span>
+                      <span className="text-lg font-bold text-[#171918] block mt-0.5">₹{activeOccupation.marketData?.salaryPercentiles?.p75 || '35.0 LPA'}</span>
+                    </div>
+                    <div className="p-3 bg-[#F1F1ED] border border-[#E4E5E1] rounded-xl">
+                      <span className="text-[#8B908B] block text-[10px] font-bold uppercase">p90 (Lead / Exec)</span>
+                      <span className="text-lg font-bold text-[#287A55] block mt-0.5">₹{activeOccupation.marketData?.salaryPercentiles?.p90 || '75.0 LPA'}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* BENTO 6: EMPLOYERS & HUBS CELL (Col Span 4) */}
+              <div className="col-span-12 lg:col-span-4 bg-[#FFFFFF] border border-[#E4E5E1] rounded-2xl p-6 sm:p-7 shadow-xs space-y-6 flex flex-col justify-between">
+                <div>
+                  <div className="border-b border-[#F1F1ED] pb-4">
+                    <span className="text-xs font-bold text-[#8B908B] uppercase tracking-wider block">Employer Distribution</span>
+                    <h3 className="text-lg font-bold text-[#171918]">Key Employers & Tech Hubs</h3>
+                  </div>
+
+                  <div className="space-y-4 pt-4">
+                    {/* Recruiters */}
+                    <div className="space-y-2">
+                      <span className="text-[11px] font-bold text-[#626762] uppercase tracking-wider flex items-center gap-1.5">
+                        <Building2 className="w-3.5 h-3.5 text-[#8B908B]" /> Top Indian Recruiters
+                      </span>
+                      <div className="flex flex-wrap gap-1.5">
+                        {(activeOccupation.marketData?.topRecruiters || []).map((company, idx) => (
+                          <span key={idx} className="px-2.5 py-1 bg-[#F1F1ED] text-[#171918] text-xs font-medium rounded-lg">
+                            {company}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Hubs */}
+                    <div className="space-y-2 pt-3 border-t border-[#F1F1ED]">
+                      <span className="text-[11px] font-bold text-[#626762] uppercase tracking-wider flex items-center gap-1.5">
+                        <MapPin className="w-3.5 h-3.5 text-[#8B908B]" /> Primary Hiring Hubs
+                      </span>
+                      <div className="flex flex-wrap gap-1.5">
+                        {(activeOccupation.marketData?.topHubs || []).map((hub, idx) => (
+                          <span key={idx} className="px-2.5 py-1 bg-[#F1F1ED] text-[#171918] text-xs font-medium rounded-lg flex items-center gap-1">
+                            <span>{hub.city}</span>
+                            <span className="font-bold text-[#2457D6]">{hub.share}%</span>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="text-[11px] text-[#8B908B] pt-2 border-t border-[#F1F1ED]">
+                  Data sourced from ONET Indian Market Dataset (820 Tech Specs Analyzed)
+                </div>
+              </div>
+
+              {/* BENTO 7: ALTERNATIVE CAREER PATHS (Col Span 12) */}
+              <div className="col-span-12 space-y-4 pt-2">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-[#8B908B] flex items-center gap-2">
+                    <Target className="w-4 h-4 text-[#626762]" />
+                    Subordinate Transition Pathways
+                  </h3>
+                  <span className="text-xs text-[#8B908B]">Based on Verified Skill Overlap</span>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                  {(alternativesList || []).map((alt) => (
+                    <div
+                      key={alt.id}
+                      className="bg-[#FFFFFF] border border-[#E4E5E1] rounded-2xl p-5 shadow-xs flex flex-col justify-between space-y-4 hover:border-[#2457D6] hover:shadow-md transition-all duration-200"
+                    >
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-[#2457D6] px-2 py-0.5 bg-[#EAF0FF] border border-[#2457D6]/20 rounded-md">
+                            {alt.suitabilityMatch} Match
+                          </span>
+                          <span className="text-xs text-[#8B908B] font-medium">
+                            {alt.horizon}
+                          </span>
+                        </div>
+
+                        <h4 className="font-bold text-[#171918] text-base">{alt.title}</h4>
+                        <p className="text-xs text-[#626762] leading-relaxed">{alt.reason}</p>
+                        
+                        <div className="text-[11px] text-[#171918] bg-[#F1F1ED] p-2.5 rounded-xl border border-[#E4E5E1]">
+                          <span className="font-semibold text-[#171918]">Key Gap:</span> {alt.missingSkill}
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={() => {
+                          if (OCCUPATIONS_DATA.some(o => o.id === alt.id)) {
+                            setSelectedOccupationId(alt.id)
+                            window.scrollTo({ top: 0, behavior: 'smooth' })
+                          }
+                        }}
+                        className="w-full py-2.5 px-3 bg-[#2457D6] hover:bg-[#1947B8] text-[#FFFFFF] rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors shadow-xs"
+                      >
+                        <span>Switch Target Role</span>
+                        <ArrowUpRight className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+            </motion.div>
+          </AnimatePresence>
+
         </div>
       </div>
-      
-      {/* Toast Notification */}
-      {showToast && (
-        <Toast 
-          message={toastMessage}
-          onClose={() => setShowToast(false)}
-        />
-      )}
     </div>
   )
 }

@@ -5,7 +5,7 @@ import React, { useState, createContext, useContext } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Menu, X } from "lucide-react";
 import { LayoutDashboard, BotMessageSquare, User, Settings, LogOut, Trash2, Heart, Target } from 'lucide-react'
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 
 const SidebarContext = createContext(undefined);
@@ -53,7 +53,7 @@ export const SidebarBody = (props) => {
     return (
         <>
             <DesktopSidebar {...props} />
-            <MobileSidebar {...props} />
+            <MobileSidebar {...(props)} />
         </>
     );
 };
@@ -67,7 +67,7 @@ export const DesktopSidebar = ({
     return (
         <motion.div
             className={cn(
-                "h-full px-4 py-4 hidden md:flex md:flex-col bg-neutral-100 dark:bg-neutral-800 w-[300px] shrink-0",
+                "h-full px-4 py-4 hidden md:flex md:flex-col bg-[#FFFFFF] border-r border-[#E4E5E1] shrink-0",
                 className
             )}
             animate={{
@@ -89,46 +89,44 @@ export const MobileSidebar = ({
 }) => {
     const { open, setOpen } = useSidebar();
     return (
-        <>
-            <div
-                className={cn(
-                    "h-10 px-4 py-4 flex flex-row md:hidden items-center justify-between bg-neutral-100 dark:bg-neutral-800 w-full"
-                )}
-                {...props}
-            >
-                <div className="flex justify-end z-20 w-full">
-                    <Menu
-                        className="text-neutral-800 dark:text-neutral-200 cursor-pointer"
-                        onClick={() => setOpen(!open)}
-                    />
-                </div>
-                <AnimatePresence>
-                    {open && (
-                        <motion.div
-                            initial={{ x: "-100%", opacity: 0 }}
-                            animate={{ x: 0, opacity: 1 }}
-                            exit={{ x: "-100%", opacity: 0 }}
-                            transition={{
-                                duration: 0.3,
-                                ease: "easeInOut",
-                            }}
-                            className={cn(
-                                "fixed h-full w-full inset-0 bg-white dark:bg-neutral-900 p-10 z-100 flex flex-col justify-between",
-                                className
-                            )}
-                        >
-                            <div
-                                className="absolute right-10 top-10 z-50 text-neutral-800 dark:text-neutral-200 cursor-pointer"
-                                onClick={() => setOpen(!open)}
-                            >
-                                <X />
-                            </div>
-                            {children}
-                        </motion.div>
-                    )}
-                </AnimatePresence>
+        <div
+            className={cn(
+                "h-10 px-4 py-4 flex flex-row md:hidden items-center justify-between bg-[#FFFFFF] border-b border-[#E4E5E1] w-full"
+            )}
+            {...props}
+        >
+            <div className="flex justify-end z-20 w-full">
+                <Menu
+                    className="text-neutral-800 dark:text-neutral-200 cursor-pointer"
+                    onClick={() => setOpen(!open)}
+                />
             </div>
-        </>
+            <AnimatePresence>
+                {open && (
+                    <motion.div
+                        initial={{ x: "-100%", opacity: 0 }}
+                        animate={{ x: 0, opacity: 1 }}
+                        exit={{ x: "-100%", opacity: 0 }}
+                        transition={{
+                            duration: 0.3,
+                            ease: "easeInOut",
+                        }}
+                        className={cn(
+                            "fixed h-full w-full inset-0 bg-white dark:bg-neutral-900 p-10 z-[100] flex flex-col justify-between",
+                            className
+                        )}
+                    >
+                        <div
+                            className="absolute right-10 top-10 z-50 text-neutral-800 dark:text-neutral-200 cursor-pointer"
+                            onClick={() => setOpen(!open)}
+                        >
+                            <X />
+                        </div>
+                        {children}
+                    </motion.div>
+                )}
+            </AnimatePresence>
+        </div>
     );
 };
 
@@ -141,12 +139,11 @@ export const SidebarLink = ({
     return (
         <a
             href={link.href}
+            onClick={link.onClick}
             className={cn(
-                "flex items-center justify-start gap-2 group/sidebar py-2",
-                link.label === "Clear Chat" && "text-red-600 dark:text-red-400",
+                "flex items-center justify-start gap-2 group/sidebar py-2 cursor-pointer",
                 className
             )}
-            onClick={link.onClick}
             {...props}
         >
             {link.icon}
@@ -155,10 +152,7 @@ export const SidebarLink = ({
                     display: animate ? (open ? "inline-block" : "none") : "inline-block",
                     opacity: animate ? (open ? 1 : 0) : 1,
                 }}
-                className={cn(
-                    "text-neutral-700 dark:text-neutral-200 text-sm group-hover/sidebar:translate-x-1 transition duration-150 whitespace-pre inline-block p-0! m-0!",
-                    link.label === "Clear Chat" && "text-red-600 dark:text-red-400"
-                )}
+                className="text-neutral-700 dark:text-neutral-200 text-sm group-hover/sidebar:translate-x-1 transition duration-150 whitespace-pre inline-block !p-0 !m-0"
             >
                 {link.label}
             </motion.span>
@@ -166,21 +160,23 @@ export const SidebarLink = ({
     );
 };
 
-
-export default function FullSidebar({ onClearChat }) {
-    const [open, setOpen] = useState(false)
-    const navigate = useNavigate()
-    const { logout } = useAuth()
+export default function FullSidebar({ children, onClearChat }) {
+    const [open, setOpen] = useState(false);
+    const navigate = useNavigate();
+    const location = useLocation();
+    const { logout } = useAuth();
+    
+    const isVectorPage = location.pathname === '/vector';
 
     const handleLogout = async (e) => {
-        e.preventDefault()
+        e.preventDefault();
         try {
-            await logout()
-            navigate('/')
+            await logout();
+            navigate('/login');
         } catch (error) {
-            console.error('Logout error:', error)
+            console.error('Logout failed:', error);
         }
-    }
+    };
 
     const links = [
         {
@@ -188,8 +184,8 @@ export default function FullSidebar({ onClearChat }) {
             href: "/zenith",
             icon: <LayoutDashboard className="text-neutral-700 dark:text-neutral-200 h-5 w-5 shrink-0" />,
             onClick: (e) => {
-                e.preventDefault()
-                navigate('/zenith')
+                e.preventDefault();
+                navigate('/zenith');
             }
         },
         {
@@ -197,8 +193,8 @@ export default function FullSidebar({ onClearChat }) {
             href: "/vector",
             icon: <BotMessageSquare className="text-neutral-700 dark:text-neutral-200 h-5 w-5 shrink-0" />,
             onClick: (e) => {
-                e.preventDefault()
-                navigate('/vector')
+                e.preventDefault();
+                navigate('/vector');
             }
         },
         {
@@ -206,17 +202,8 @@ export default function FullSidebar({ onClearChat }) {
             href: "/profile",
             icon: <User className="text-neutral-700 dark:text-neutral-200 h-5 w-5 shrink-0" />,
             onClick: (e) => {
-                e.preventDefault()
-                navigate('/profile')
-            }
-        },
-        {
-            label: "Job Wishlist",
-            href: "/wishlist",
-            icon: <Heart className="text-neutral-700 dark:text-neutral-200 h-5 w-5 shrink-0" />,
-            onClick: (e) => {
-                e.preventDefault()
-                navigate('/wishlist')
+                e.preventDefault();
+                navigate('/profile');
             }
         },
         {
@@ -224,21 +211,21 @@ export default function FullSidebar({ onClearChat }) {
             href: "/skills",
             icon: <Target className="text-neutral-700 dark:text-neutral-200 h-5 w-5 shrink-0" />,
             onClick: (e) => {
-                e.preventDefault()
-                navigate('/skills')
+                e.preventDefault();
+                navigate('/skills');
             }
         },
-        {
+        ...(isVectorPage ? [{
             label: "Clear Chat",
             href: "#",
             icon: <Trash2 className="text-red-600 dark:text-red-400 h-5 w-5 shrink-0" />,
             onClick: (e) => {
-                e.preventDefault()
+                e.preventDefault();
                 if (onClearChat) {
-                    onClearChat()
+                    onClearChat();
                 }
             }
-        },
+        }] : []),
         {
             label: "Logout",
             href: "#",
@@ -246,8 +233,9 @@ export default function FullSidebar({ onClearChat }) {
             onClick: handleLogout
         },
     ];
+
     return (
-        <div className="flex h-screen w-full">
+        <div className={`flex h-screen ${children ? 'w-full' : 'shrink-0'} overflow-hidden`}>
             <Sidebar open={open} setOpen={setOpen}>
                 <SidebarBody className="justify-between gap-10">
                     <div className="flex flex-col flex-1 overflow-y-auto overflow-x-hidden">
@@ -284,7 +272,11 @@ export default function FullSidebar({ onClearChat }) {
                     </div>
                 </SidebarBody>
             </Sidebar>
+            {children && (
+                <div className="flex-1 h-screen overflow-y-auto">
+                    {children}
+                </div>
+            )}
         </div>
-    )
-
+    );
 }

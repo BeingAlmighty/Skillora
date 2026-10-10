@@ -4,7 +4,7 @@ import React, { useState, createContext, useContext } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Menu, X } from "lucide-react";
 import { Home, MessageSquare, User, Settings, LogOut, Trash2 } from 'lucide-react'
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 const SidebarContext = createContext(undefined);
 export const useSidebar = () => {
@@ -157,6 +157,7 @@ export const SidebarLink = ({
 export default function FullSidebar({ onClearChat }) {
     const [open, setOpen] = useState(false)
     const navigate = useNavigate()
+    const location = useLocation()
     const { logout } = useAuth()
     const handleLogout = async (e) => {
         e.preventDefault()
@@ -167,6 +168,7 @@ export default function FullSidebar({ onClearChat }) {
             console.error('Logout error:', error)
         }
     }
+    const isVectorPage = location.pathname === '/vector';
     const links = [
         {
             label: "Dashboard",
@@ -183,7 +185,7 @@ export default function FullSidebar({ onClearChat }) {
             href: "#",
             icon: <User className="text-neutral-700 dark:text-neutral-200 h-5 w-5 shrink-0" />,
         },
-        {
+        ...(isVectorPage ? [{
             label: "Clear Chat",
             href: "#",
             icon: <Trash2 className="text-red-600 dark:text-red-400 h-5 w-5 shrink-0" />,
@@ -193,7 +195,7 @@ export default function FullSidebar({ onClearChat }) {
                     onClearChat()
                 }
             }
-        },
+        }] : []),
         {
             label: "Logout",
             href: "#",

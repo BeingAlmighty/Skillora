@@ -2,7 +2,6 @@ import React, { useState } from 'react'
 import { useProfile } from '../../context/ProfileContext'
 import { useAuth } from '../../context/AuthContext'
 import FullSidebar from '../Vector/Sidebar'
-import SkillChatbot from '../Skills/SkillChatbot'
 import { 
   Target, 
   Trash2, 
@@ -10,7 +9,6 @@ import {
   Award,
   Search,
   X,
-  MessageCircle,
   DollarSign,
   Briefcase,
   CheckCircle,
@@ -22,9 +20,7 @@ const Skills = () => {
   const { userSkills, removeSkill, updateSkill, zenithApiData } = useProfile()
   const { user } = useAuth()
   const [searchQuery, setSearchQuery] = useState('')
-  const [selectedSkillForChat, setSelectedSkillForChat] = useState(null)
 
-  // Filter skills
   const filteredSkills = userSkills.filter(skill => {
     if (!searchQuery) return true
     return skill.name.toLowerCase().includes(searchQuery.toLowerCase())
@@ -60,18 +56,15 @@ const Skills = () => {
 
   return (
     <div className="relative h-screen w-screen bg-gray-50 dark:bg-neutral-900 overflow-hidden">
-      {/* Sidebar */}
       <div className="fixed left-0 top-0 h-screen z-100">
         <FullSidebar />
       </div>
 
-      {/* Main Content */}
       <div className="h-screen flex items-center justify-center overflow-hidden" style={{ width: '1200px', marginLeft: '80px' }}>
         <div className="w-full h-full flex items-center justify-center px-4">
           <div className="w-full h-full py-8 overflow-hidden">
             <div className="h-full overflow-y-auto px-4 scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-700">
               
-              {/* Header */}
               <div className="mb-6">
                 <div className="flex items-center gap-3 mb-2">
                   <Target className="h-8 w-8 text-blue-500" />
@@ -80,11 +73,10 @@ const Skills = () => {
                   </h1>
                 </div>
                 <p className="text-gray-600 dark:text-gray-400">
-                  Your skills portfolio with AI-powered learning guidance and ROI insights
+                  Your skills portfolio with ROI insights
                 </p>
               </div>
 
-              {/* Stats Grid */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                 <div className="bg-white dark:bg-neutral-800 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
                   <div className="flex items-center gap-2 mb-1">
@@ -111,7 +103,6 @@ const Skills = () => {
                 </div>
               </div>
 
-              {/* Search Bar */}
               <div className="bg-white dark:bg-neutral-800 rounded-lg p-4 mb-6 border border-gray-200 dark:border-gray-700">
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
@@ -133,7 +124,6 @@ const Skills = () => {
                 </div>
               </div>
 
-              {/* Skills Grid */}
               {filteredSkills.length === 0 ? (
                 <div className="bg-white dark:bg-neutral-800 rounded-lg p-12 text-center border border-gray-200 dark:border-gray-700">
                   <Target className="h-16 w-16 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
@@ -167,7 +157,6 @@ const Skills = () => {
                             : 'border-gray-200 dark:border-gray-700'
                         }`}
                       >
-                        {/* Header */}
                         <div className="flex items-start justify-between mb-3">
                           <div className="flex-1">
                             <div className="flex items-center gap-2 mb-2">
@@ -183,7 +172,6 @@ const Skills = () => {
                               )}
                             </div>
                             
-                            {/* Importance Tier Badge */}
                             {roiData && roiData.tier && (
                               <span className={`inline-block px-3 py-1 rounded-full text-xs font-semibold border ${getTierColor(roiData.tier)}`}>
                                 {roiData.tier}
@@ -205,7 +193,6 @@ const Skills = () => {
                           </button>
                         </div>
 
-                        {/* ROI Information */}
                         {roiData && (
                           <div className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 rounded-lg p-4 mb-4 border border-blue-200 dark:border-blue-800">
                             <div className="flex items-center gap-2 mb-3">
@@ -245,18 +232,16 @@ const Skills = () => {
                           </div>
                         )}
 
-                        {/* Added Date */}
                         {skill.addedDate && (
                           <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
                             Added on {new Date(skill.addedDate).toLocaleDateString()}
                           </p>
                         )}
 
-                        {/* Action Buttons */}
-                        <div className="grid grid-cols-2 gap-3">
+                        <div className="w-full">
                           <button
                             onClick={() => handleToggleComplete(skill.id)}
-                            className={`flex items-center justify-center gap-2 px-4 py-3 rounded-lg transition font-medium ${
+                            className={`w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg transition font-medium ${
                               skill.completed
                                 ? 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
                                 : 'bg-green-500 hover:bg-green-600 text-white'
@@ -274,14 +259,6 @@ const Skills = () => {
                               </>
                             )}
                           </button>
-                          
-                          <button
-                            onClick={() => setSelectedSkillForChat(skill)}
-                            className="flex items-center justify-center gap-2 px-4 py-3 bg-orange-500 hover:bg-orange-600 text-white rounded-lg transition font-medium"
-                          >
-                            <MessageCircle className="h-5 w-5" />
-                            AI Guide
-                          </button>
                         </div>
                       </div>
                     )
@@ -292,15 +269,6 @@ const Skills = () => {
           </div>
         </div>
       </div>
-
-      {/* Skill Chatbot Modal */}
-      {selectedSkillForChat && (
-        <SkillChatbot 
-          skill={selectedSkillForChat}
-          roiData={getSkillROI(selectedSkillForChat.name)}
-          onClose={() => setSelectedSkillForChat(null)}
-        />
-      )}
     </div>
   )
 }
